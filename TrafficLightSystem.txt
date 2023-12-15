@@ -1,0 +1,238 @@
+/*
+ * Name: Nancy Zhu
+ * Teacher: Mr. Wong
+ * Date: 11/02/2020
+ * Assignment: This program goes with an arduino that will display a traffic light system that imitates a T-intersection.
+ *			   There are 3 traffic lights, a pedestrian light, a button for the pedestrain light, a street light, and a 
+ *			   remote controlled gate.
+ */
+
+#include <Servo.h>
+#include <IRremote.h> 
+
+//Declaration section
+const int pingPin = 3; //Ultrasonic pin
+Servo servo_13; //Servo declaration
+int photoresistor = 0; //Reads the value of the LDR
+int count = 0; //Counts each loop iteration and displays a different lgiht depending on the iteration number
+int push; //Determines if the button was pushed
+int redDelay = 6; //The red light delay is split into two different even sections. This value is for each of the two sections
+int greenDelay = 6; //The green light delay
+int yellowDelay = 6; //The yellow light delay
+int cycle = 0; //Used to count the green light runs
+boolean keepDelay = false; //Boolean that keeps the delays when they are set and makes sure the if statements don't reset them
+int RECV_PIN = 2; //IR sensor
+IRrecv irrecv(RECV_PIN); //IR remote
+decode_results results; //IR remote
+int gateCount = 0; //Determines which one of the steps is played
+boolean press = false; //Determines if the controler was pressed
+int servoAngle = 0; //The angle of the servo
+
+void setup()
+{
+  pinMode(7, OUTPUT); //Red traffic light
+  pinMode(12, OUTPUT); //Yellow traffic light
+  pinMode(11, OUTPUT); //Green traffic light
+  pinMode(10, OUTPUT); //Red traffic light
+  pinMode(9, OUTPUT); //Yellow traffic light
+  pinMode(8, OUTPUT); //Green traffic light and white pedestrian light
+  pinMode(6, OUTPUT); //Red pedestrian light
+  pinMode(5, INPUT); //Button input
+  pinMode(A0, INPUT); //LDR input
+  pinMode(4, OUTPUT); //Street light
+  Serial.begin(9600); //Ultrasonic sensor
+  servo_13.attach(13); //Servo
+  irrecv.enableIRIn(); // Start the receiver
+}
+
+void loop()
+{
+  button(); //Checks to see if button was pressed
+  
+  trafficLight(); //Plays traffic lights
+
+  //Street light
+  photoresistor = analogRead(A0); //Reads from LDR
+  analogWrite(4, map(photoresistor, 0, 1023, 0, 255)); //Changes the light
+  
+  // establish variables for duration of the ping, and the distance result
+  // in inches and centimeters:
+  long duration, inches, cm;
+  // The PING))) is triggered by a HIGH pulse of 2 or more microseconds.
+  // Give a short LOW pulse beforehand to ensure a clean HIGH pulse:
+  pinMode(pingPin, OUTPUT);
+  digitalWrite(pingPin, LOW);
+  digitalWrite(pingPin, HIGH);
+  digitalWrite(pingPin, LOW);
+  // The same pin is used to read the signal from the PING))): a HIGH pulse
+  // whose duration is the time (in microseconds) from the sending of the ping
+  // to the reception of its echo off of an object.
+  pinMode(pingPin, INPUT);
+  duration = pulseIn(pingPin, HIGH);
+  // convert the time into a distance
+  inches = microsecondsToInches(duration);
+  cm = microsecondsToCentimeters(duration);
+
+  Serial.print(inches);
+  Serial.print("in, ");
+  Serial.print(cm);
+  Serial.print("cm");
+  Serial.println();
+  
+  trafficLight(); //Plays traffic lights
+  
+  if(press == false){ //Only pays if remote button has not been pressed
+  	if(gateCount == 0 && cm >= 150 && cm <= 200){ //When something is within range of the sensor when the servo is not already moving
+    	gateCount = 1; //Causes the below code to run
+  	}
+    
+  	if(gateCount == 1){ //The first delay before the servo moves
+    	delay(2000); //Delays
+    	gateCount++; //Adds to the counter each iteration
+  	}else if(gateCount == 2){
+    	servo_13.write(90); //Moves the servo
+      gateCount++; //Adds to the counter each iteration
+      delay(10); //Delays
+  	}else if(gateCount == 3){
+    	delay(4000); //Delays
+    	gateCount++; //Adds to the counter each iteration
+  	}else if(gateCount == 4){
+    	servo_13.write(0); //Moves the servo
+      delay(10); //Delays
+    	gateCount = 0; //Adds to the counter each iteration
+  	}
+  }
+  
+  if (irrecv.decode(&results)) {
+    Serial.println(results.value, HEX);
+    
+    if(results.value == 0xFD08F7){ //If one is pressed
+      press = true; //Plays the code below in the if statement
+    }
+    irrecv.resume(); // Receive the next value
+  }
+  
+  if(press == true){ //The remote button has been pressed
+   gateCount = 1;
+      if(gateCount == 1){ //The first delay before the servo moves
+    	delay(2000); //Delays
+    	gateCount++; //Adds to the counter
+  	}else if(gateCount == 2){
+    	servo_13.write(90); //Moves the servo
+      gateCount++; //Adds to the counter 
+      delay(10); //Delays
+  	}else if(gateCount == 3){
+    	delay(4000); //Delays
+    	gateCount++; //Adds to the counter
+  	}else if(gateCount == 4){
+    	servo_13.write(0); //Moves the servo
+      delay(10); //Delays
+    	gateCount = 0; //Adds to the counter 
+  	}
+    press = false;
+  }
+  
+  trafficLight(); //Plays traffic lights
+}
+
+void trafficLight(){
+   count++; //Adds to the interation count
+   if(count <= 500){ //Lights up green light
+    digitalWrite(7, HIGH); //Red lights
+    digitalWrite(12, LOW);
+    digitalWrite(11, LOW);
+    digitalWrite(10, LOW);
+    digitalWrite(9, LOW);
+    digitalWrite(8, HIGH); //Green light and white light
+    digitalWrite(6, LOW);
+    
+    delay(greenDelay); //Delay value depends on the button
+
+    if(count == 500 && cycle == 1){ //Shows that the green light has already been played once
+      cycle = 2;
+    }else if(count == 500 && cycle == 2){ //Resets the value of cycle for the next time the button is pressed
+      cycle = 0;
+    }
+    
+    if(count == 500){ //Sets delay value to 6 again after 1 run through
+      greenDelay = 6;
+    }
+  }else if(count >= 501 && count <= 1000){ //Lights up yellow light
+    digitalWrite(7, HIGH); //Red lights
+    digitalWrite(12, LOW);
+    digitalWrite(11, LOW);
+    digitalWrite(10, LOW);
+    digitalWrite(9, HIGH); //Yellow light
+    digitalWrite(8, LOW);
+    digitalWrite(6, HIGH);
+
+    delay(yellowDelay); //Delay value depends on the button
+
+    if(count == 1000){ //Sets delay value to 6 again after 1 run through
+      yellowDelay = 6;
+    }
+  }else if(count >= 1001 && count <= 1500){ //Lights up red light
+    digitalWrite(7, LOW);
+    digitalWrite(12, LOW);
+    digitalWrite(11, HIGH); //Green lights
+    digitalWrite(10, HIGH); //Red light
+    digitalWrite(9, LOW);
+    digitalWrite(8, LOW);
+    digitalWrite(6, HIGH); //Red light
+    
+    delay(redDelay);
+  }else if (count >= 1501 && count <= 2000){ //Lights up red light
+    digitalWrite(7, LOW);
+    digitalWrite(12, HIGH); //Yellow lights
+    digitalWrite(11, LOW);
+    digitalWrite(10, HIGH); //Red light
+    digitalWrite(9, LOW);
+    digitalWrite(8, LOW);
+    digitalWrite(6, HIGH); //Red light
+    
+    delay(redDelay);
+    if(count == 2000){ //Sets delay value to 6 again after 1 run through of both reds
+      redDelay = 6;
+    }
+  }else{
+    count = 0;//Sets count value back to 0 and restarts the cycle
+  }
+  
+}
+
+void button(){
+  push = digitalRead(5); //Reads input from button, because of the way it was wired the results are opposite
+  if(push == LOW){
+    if(count <= 500){ //If the button is pushed when the light is green
+      Serial.println("green"); //Shows that button press is registering
+      cycle = 1; //Sets cycle to 1 so at the next green light it'll last longerr
+    }else if(count >= 501 && count <= 1000){ //If the button is pushed when the light is yellow
+      Serial.println("yellow"); //Shows that button press is registering
+      yellowDelay = 3; //Halves the yellow delay
+      greenDelay = 9; //Adds 50% to the green delay
+    }else if(count >= 1001 && count <= 2000){ //If the button is pushed when the light is red
+      Serial.println("red"); //Shows that button press is registering
+      redDelay = 3; //Halves the red delay
+      greenDelay = 9; //Adds 50% to the green delay
+    }
+  }
+  if(cycle == 2){
+    greenDelay = 9; //Adds 50% to the green delay
+  }
+}
+
+long microsecondsToInches(long microseconds) {
+  // According to Parallax's datasheet for the PING))), there are 73.746
+  // microseconds per inch (i.e. sound travels at 1130 feet per second).
+  // This gives the distance travelled by the ping, outbound and return,
+  // so we divide by 2 to get the distance of the obstacle.
+  // See: http://www.parallax.com/dl/docs/prod/acc/28015-PING-v1.3.pdf
+  return microseconds / 74 / 2;
+}
+
+long microsecondsToCentimeters(long microseconds) {
+  // The speed of sound is 340 m/s or 29 microseconds per centimeter.
+  // The ping travels out and back, so to find the distance of the object we
+  // take half of the distance travelled.
+  return microseconds / 29 / 2;
+}
